@@ -1,23 +1,58 @@
 #!/bin/bash
 
+set -e
+
 # omakub-launch-webapp: Launch a web application as a standalone window.
-# Usage: omakub-launch-webapp <app-url> <app-name>
+# Usage: omakub-launch-webapp <app-url> <app-name> [desktop-id]
 
 if [[ -z $1 || -z $2 ]]; then
-  echo "Usage: omakub-launch-webapp <app-url> <app-name>" >&2
+  echo "Usage: omakub-launch-webapp <app-url> <app-name> [desktop-id]" >&2
   exit 1
 fi
 
+webapp_slug() {
+  local value="$1"
+  value=$(echo "$value" | tr '[:upper:]' '[:lower:]')
+  value=$(echo "$value" | sed 's/[^a-z0-9]/-/g; s/-\+/-/g; s/^-//; s/-$//')
+  if [[ -z $value ]]; then
+    value="webapp"
+  fi
+  echo "$value"
+}
+
 APP_URL="$1"
 APP_NAME="$2"
-APP_ID=$(echo "$APP_NAME" | sed 's/[^a-zA-Z0-9]//g' | tr '[:upper:]' '[:lower:]')
+DESKTOP_ID="$3"
+
+if [[ -n $DESKTOP_ID ]]; then
+  APP_SLUG="${DESKTOP_ID#omakub-webapp-}"
+  if [[ -z $APP_SLUG || $APP_SLUG == $DESKTOP_ID ]]; then
+    APP_SLUG=$(webapp_slug "$APP_NAME")
+  fi
+  APP_CLASS="$DESKTOP_ID"
+  CHROME_DESKTOP_FILE="$DESKTOP_ID.desktop"
+else
+  APP_SLUG=$(echo "$APP_NAME" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+  APP_CLASS=$(echo "$APP_NAME" | sed 's/[^a-zA-Z0-9]//g' | tr '[:upper:]' '[:lower:]')
+  CHROME_DESKTOP_FILE="$APP_NAME.desktop"
+fi
+
+if [[ -z $APP_SLUG ]]; then
+  APP_SLUG=$(webapp_slug "$APP_NAME")
+fi
+
+if [[ -z $APP_CLASS ]]; then
+  APP_CLASS="omakub-webapp-$APP_SLUG"
+fi
 
 # This prevents data loss and force to open in a separate profile
 OMAKUB_DATA_DIR="$HOME/.config/omakub/webapp"
-WEBAPP_DATA_DIR="$OMAKUB_DATA_DIR/$(echo "$APP_NAME" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')"
+WEBAPP_DATA_DIR="$OMAKUB_DATA_DIR/$APP_SLUG"
 if [[ ! -d $WEBAPP_DATA_DIR ]]; then
   mkdir -p "$WEBAPP_DATA_DIR"
 fi
+
+export CHROME_DESKTOP="$CHROME_DESKTOP_FILE"
 
 browser=$(xdg-settings get default-web-browser)
 case $browser in
@@ -30,5 +65,5 @@ exec "$browser_exec" \
   --user-data-dir="$WEBAPP_DATA_DIR" \
   --window-size=800,600 \
   --app="$APP_URL" \
-  --class="$APP_ID" \
+  --class="$APP_CLASS" \
   --name="$APP_NAME"

@@ -2,47 +2,131 @@
 
 set -e
 
-# omakub-app-folder-remove: Remove a .desktop file from a specified app folder.
-# Usage: omakub-app-folder-remove <desktop_file.desktop> <folder_name>
+# omakub-webapp-remove: Remove one or more web apps created by omakub-webapp-install.
+# Usage: omakub-webapp-remove [app_name_or_desktop_id...]
 
 ICON_DIR="$HOME/.local/share/applications/icons"
-DESKTOP_DIR="$HOME/.local/share/applications/"
+DESKTOP_DIR="${OMAKUB_WEBAPP_DESKTOP_DIR:-$HOME/.local/share/applications}"
+WEBAPP_DATA_ROOT="$HOME/.config/omakub/webapp"
 
-if (( $# == 0 )); then
-  # Find all web apps
-  while IFS= read -r -d '' file; do
-    if grep -q '^Exec=.*omakub-launch-webapp.*' "$file"; then
-      WEB_APPS+=("$(basename "${file%.desktop}")")
-    fi
-  done < <(find "$DESKTOP_DIR" -name '*.desktop' -print0)
+desktop_id_from_file() {
+  basename "${1%.desktop}"
+}
 
-  if ((${#WEB_APPS[@]})); then
-    IFS=$'\n' SORTED_WEB_APPS=($(sort <<<"${WEB_APPS[*]}"))
-    unset IFS
-    APP_NAMES_STRING=$(gum choose --no-limit --header "Select web app to remove..." --selected-prefix="✗ " "${SORTED_WEB_APPS[@]}")
-    # Convert newline-separated string to array
-    APP_NAMES=()
-    while IFS= read -r line; do
-      [[ -n $line ]] && APP_NAMES+=("$line")
-    done <<< "$APP_NAMES_STRING"
+desktop_display_name() {
+  local file="$1"
+  local name
+  name=$(grep -m1 '^Name=' "$file" | cut -d= -f2-)
+  if [[ -n $name ]]; then
+    echo "$name"
   else
-    echo "No web apps to remove."
-    exit 1
+    desktop_id_from_file "$file"
   fi
-else
-  # Use array to preserve spaces in app names
-  APP_NAMES=("$@")
+}
+
+profile_slug_from_desktop_id() {
+  local desktop_id="$1"
+  local slug="$desktop_id"
+  if [[ $slug == omakub-webapp-* ]]; then
+    slug="${slug#omakub-webapp-}"
+  fi
+  echo "$slug"
+}
+
+legacy_profile_slug_from_name() {
+  echo "$1" | tr ' ' '-' | tr '[:upper:]' '[:lower:]'
+}
+
+remove_webapp_file() {
+  local file="$1"
+  local desktop_id app_name icon_ref profile_slug legacy_slug
+
+  desktop_id=$(desktop_id_from_file "$file")
+  app_name=$(desktop_display_name "$file")
+  icon_ref=$(grep -m1 '^Icon=' "$file" | cut -d= -f2-)
+  profile_slug=$(profile_slug_from_desktop_id "$desktop_id")
+  legacy_slug=$(legacy_profile_slug_from_name "$app_name")
+
+  omakub-app-folder-remove "$desktop_id.desktop" "Web Apps"
+  rm -f "$DESKTOP_DIR/$desktop_id.desktop"
+
+  if [[ -n $icon_ref ]]; then
+    if [[ $icon_ref == /* && -f $icon_ref ]]; then
+      rm -f "$icon_ref"
+    elif [[ -f $ICON_DIR/$icon_ref ]]; then
+      rm -f "$ICON_DIR/$icon_ref"
+    fi
+  fi
+
+  rm -f "$ICON_DIR/$desktop_id.png"
+  rm -f "$ICON_DIR/$app_name.png"
+
+  if [[ -n $profile_slug ]]; then
+    rm -rf "$WEBAPP_DATA_ROOT/$profile_slug"
+  fi
+  if [[ -n $legacy_slug && $legacy_slug != $profile_slug ]]; then
+    rm -rf "$WEBAPP_DATA_ROOT/$legacy_slug"
+  fi
+
+  echo "Removed $app_name"
+}
+
+declare -a WEBAPP_FILES=()
+while IFS= read -r -d '' file; do
+  if grep -q '^Exec=.*omakub-launch-webapp.*' "$file"; then
+    WEBAPP_FILES+=("$file")
+  fi
+done < <(find "$DESKTOP_DIR" -maxdepth 1 -name '*.desktop' -print0 2>/dev/null)
+
+if (( ${#WEBAPP_FILES[@]} == 0 )); then
+  echo "No web apps to remove."
+  exit 1
 fi
 
-if (( ${#APP_NAMES[@]} == 0 )); then
+if (( $# == 0 )); then
+  declare -a WEBAPP_LABELS=()
+  declare -A LABEL_TO_FILE=()
+
+  for file in "${WEBAPP_FILES[@]}"; do
+    desktop_id=$(desktop_id_from_file "$file")
+    app_name=$(desktop_display_name "$file")
+    label="$app_name [$desktop_id]"
+    WEBAPP_LABELS+=("$label")
+    LABEL_TO_FILE["$label"]="$file"
+  done
+
+  mapfile -t SORTED_WEBAPP_LABELS < <(printf '%s\n' "${WEBAPP_LABELS[@]}" | sort)
+  APP_LABELS_STRING=$(gum choose --no-limit --header "Select web app to remove..." --selected-prefix="✗ " "${SORTED_WEBAPP_LABELS[@]}")
+
+  APP_FILES=()
+  while IFS= read -r label; do
+    if [[ -n $label && -n ${LABEL_TO_FILE[$label]} ]]; then
+      APP_FILES+=("${LABEL_TO_FILE[$label]}")
+    fi
+  done <<< "$APP_LABELS_STRING"
+else
+  declare -A SELECTED_FILES=()
+  APP_IDENTIFIERS=("$@")
+
+  for file in "${WEBAPP_FILES[@]}"; do
+    desktop_id=$(desktop_id_from_file "$file")
+    app_name=$(desktop_display_name "$file")
+
+    for identifier in "${APP_IDENTIFIERS[@]}"; do
+      if [[ $identifier == $desktop_id || $identifier == $app_name ]]; then
+        SELECTED_FILES["$file"]=1
+      fi
+    done
+  done
+
+  APP_FILES=("${!SELECTED_FILES[@]}")
+fi
+
+if (( ${#APP_FILES[@]} == 0 )); then
   echo "You must select at least one web app to remove."
   exit 1
 fi
 
-for APP_NAME in "${APP_NAMES[@]}"; do
-  omakub-app-folder-remove "$APP_NAME.desktop" "Web Apps"
-  rm -f "$DESKTOP_DIR/$APP_NAME.desktop"
-  rm -f "$ICON_DIR/$APP_NAME.png"
-  rm -rf "$HOME/.config/omakub/webapp/$(echo "$APP_NAME" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')"
-  echo "Removed $APP_NAME"
+for file in "${APP_FILES[@]}"; do
+  remove_webapp_file "$file"
 done
