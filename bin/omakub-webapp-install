@@ -36,6 +36,24 @@ resolve_webapp_launcher_path() {
   echo "$launcher_path"
 }
 
+webapp_slug() {
+  local value="$1"
+  value=$(echo "$value" | tr '[:upper:]' '[:lower:]')
+  value=$(echo "$value" | sed 's/[^a-z0-9]/-/g; s/-\+/-/g; s/^-//; s/-$//')
+  if [[ -z $value ]]; then
+    value="webapp"
+  fi
+  echo "$value"
+}
+
+desktop_exec_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//%/%%}"
+  echo "$value"
+}
+
 if (( $# < 3 )); then
   echo -e "\e[32mLet's create a new web app you can start with the app launcher.\n\e[0m"
   APP_NAME=$(gum input --prompt "Name> " --placeholder "My favorite web app")
@@ -46,9 +64,15 @@ if (( $# < 3 )); then
 
   # Try to fetch favicon automatically first.
   FAVICON_URL="https://www.google.com/s2/favicons?domain=${APP_URL}&sz=128"
+<<<<<<< HEAD
   mkdir -p "$SOURCE_ICON_DIR"
   if curl -fsSL -o "$SOURCE_ICON_DIR/$APP_NAME.png" "$FAVICON_URL" && [[ -s $SOURCE_ICON_DIR/$APP_NAME.png ]]; then
     ICON_REF="$SOURCE_ICON_DIR/$APP_NAME.png"
+=======
+  mkdir -p "$ICON_DIR"
+  if curl -fsSL -o "$ICON_DIR/$APP_NAME.png" "$FAVICON_URL" && [[ -s $ICON_DIR/$APP_NAME.png ]]; then
+    ICON_REF="$ICON_DIR/$APP_NAME.png"
+>>>>>>> 0aebc76 (try fix issue 39 v1)
   else
     ICON_REF=$(gum input --prompt "Icon URL> " --placeholder "Could not fetch favicon automatically. Enter PNG icon URL (see https://dashboardicons.com)")
   fi
@@ -75,17 +99,28 @@ fi
 
 APP_SLUG=$(webapp_slug "$APP_NAME")
 DESKTOP_ID="omakub-webapp-$APP_SLUG"
+<<<<<<< HEAD
 DESKTOP_FILE="$DESKTOP_DIR/$DESKTOP_ID.desktop"
 LEGACY_DESKTOP_FILE="$DESKTOP_DIR/$APP_NAME.desktop"
 
 mkdir -p "$SOURCE_ICON_DIR"
 mkdir -p "$WEBAPP_ICON_DIR"
+=======
+DESKTOP_FILE="$HOME/.local/share/applications/$DESKTOP_ID.desktop"
+LEGACY_DESKTOP_FILE="$HOME/.local/share/applications/$APP_NAME.desktop"
+
+mkdir -p "$ICON_DIR"
+>>>>>>> 0aebc76 (try fix issue 39 v1)
 
 if [[ -z $ICON_REF ]]; then
   ICON_REF="https://www.google.com/s2/favicons?domain=${APP_URL}&sz=128"
 fi
 
+<<<<<<< HEAD
 ICON_PATH="$WEBAPP_ICON_DIR/$DESKTOP_ID.png"
+=======
+ICON_PATH="$ICON_DIR/$DESKTOP_ID.png"
+>>>>>>> 0aebc76 (try fix issue 39 v1)
 if [[ $ICON_REF =~ ^https?:// ]]; then
   if ! curl -fsSL -o "$ICON_PATH" "$ICON_REF" || [[ ! -s $ICON_PATH ]]; then
     echo "Error: Failed to download icon."
@@ -94,6 +129,7 @@ if [[ $ICON_REF =~ ^https?:// ]]; then
 else
   if [[ -f $ICON_REF ]]; then
     cp -f "$ICON_REF" "$ICON_PATH"
+<<<<<<< HEAD
   elif [[ -f $SOURCE_ICON_DIR/$ICON_REF ]]; then
     cp -f "$SOURCE_ICON_DIR/$ICON_REF" "$ICON_PATH"
   elif [[ -f $SOURCE_ICON_DIR/$ICON_REF.png ]]; then
@@ -102,6 +138,10 @@ else
     cp -f "$WEBAPP_ICON_DIR/$ICON_REF" "$ICON_PATH"
   elif [[ -f $WEBAPP_ICON_DIR/$ICON_REF.png ]]; then
     cp -f "$WEBAPP_ICON_DIR/$ICON_REF.png" "$ICON_PATH"
+=======
+  elif [[ -f $ICON_DIR/$ICON_REF ]]; then
+    cp -f "$ICON_DIR/$ICON_REF" "$ICON_PATH"
+>>>>>>> 0aebc76 (try fix issue 39 v1)
   else
     echo "Error: Icon file not found: $ICON_REF"
     exit 1
@@ -111,12 +151,19 @@ fi
 if [[ -n $CUSTOM_EXEC ]]; then
   EXEC_COMMAND="$CUSTOM_EXEC"
 else
+<<<<<<< HEAD
   LAUNCHER_PATH=$(resolve_webapp_launcher_path)
   ESCAPED_LAUNCHER_PATH=$(desktop_exec_escape "$LAUNCHER_PATH")
   ESCAPED_URL=$(desktop_exec_escape "$APP_URL")
   ESCAPED_NAME=$(desktop_exec_escape "$APP_NAME")
   ESCAPED_DESKTOP_ID=$(desktop_exec_escape "$DESKTOP_ID")
   EXEC_COMMAND="\"$ESCAPED_LAUNCHER_PATH\" \"$ESCAPED_URL\" \"$ESCAPED_NAME\" \"$ESCAPED_DESKTOP_ID\""
+=======
+  ESCAPED_URL=$(desktop_exec_escape "$APP_URL")
+  ESCAPED_NAME=$(desktop_exec_escape "$APP_NAME")
+  ESCAPED_DESKTOP_ID=$(desktop_exec_escape "$DESKTOP_ID")
+  EXEC_COMMAND="omakub-launch-webapp \"$ESCAPED_URL\" \"$ESCAPED_NAME\" \"$ESCAPED_DESKTOP_ID\""
+>>>>>>> 0aebc76 (try fix issue 39 v1)
 fi
 
 cat >"$DESKTOP_FILE" <<EOF
@@ -146,6 +193,7 @@ if [[ -f $LEGACY_DESKTOP_FILE && $LEGACY_DESKTOP_FILE != $DESKTOP_FILE ]]; then
 fi
 
 omakub-app-folder-add "$DESKTOP_ID.desktop" "Web Apps"
+<<<<<<< HEAD
 
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
@@ -154,6 +202,8 @@ fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
 fi
+=======
+>>>>>>> 0aebc76 (try fix issue 39 v1)
 
 if [[ $INTERACTIVE_MODE == true ]]; then
   echo -e "You can now find $APP_NAME using the app launcher (SUPER + SPACE)\n"
