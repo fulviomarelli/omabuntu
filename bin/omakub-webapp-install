@@ -2,10 +2,28 @@
 
 set -e
 
-# omakub-webapp-add: Create a .desktop file for a web app and add it to the "Web Apps" folder.
-# Usage: omakub-webapp-add <app_name> <app_url> <icon_url_or_path> [custom_exec] [mime_types]
+# omakub-webapp-install: Create a .desktop file for a web app and add it to the "Web Apps" folder.
+# Usage: omakub-webapp-install <app_name> <app_url> <icon_url_or_path> [custom_exec] [mime_types]
 
 ICON_DIR="$HOME/.local/share/applications/icons"
+
+webapp_slug() {
+  local value="$1"
+  value=$(echo "$value" | tr '[:upper:]' '[:lower:]')
+  value=$(echo "$value" | sed 's/[^a-z0-9]/-/g; s/-\+/-/g; s/^-//; s/-$//')
+  if [[ -z $value ]]; then
+    value="webapp"
+  fi
+  echo "$value"
+}
+
+desktop_exec_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//%/%%}"
+  echo "$value"
+}
 
 if (( $# < 3 )); then
   echo -e "\e[32mLet's create a new web app you can start with the app launcher.\n\e[0m"
@@ -19,7 +37,7 @@ if (( $# < 3 )); then
   FAVICON_URL="https://www.google.com/s2/favicons?domain=${APP_URL}&sz=128"
   mkdir -p "$ICON_DIR"
   if curl -fsSL -o "$ICON_DIR/$APP_NAME.png" "$FAVICON_URL" && [[ -s $ICON_DIR/$APP_NAME.png ]]; then
-    ICON_REF="$APP_NAME.png"
+    ICON_REF="$ICON_DIR/$APP_NAME.png"
   else
     ICON_REF=$(gum input --prompt "Icon URL> " --placeholder "Could not fetch favicon automatically. Enter PNG icon URL (see https://dashboardicons.com)")
   fi
@@ -34,39 +52,52 @@ else
     APP_URL="https://$APP_URL"
   fi
   ICON_REF="$3"
-  CUSTOM_EXEC="$4" # Optional custom exec command
-  MIME_TYPES="$5"  # Optional mime types
+  CUSTOM_EXEC="$4"
+  MIME_TYPES="$5"
   INTERACTIVE_MODE=false
 fi
 
-# Ensure valid execution
 if [[ -z $APP_NAME || -z $APP_URL ]]; then
   echo "You must set app name and app URL!"
   exit 1
 fi
 
-# Resolve icon from URL or from a local icon name.
+APP_SLUG=$(webapp_slug "$APP_NAME")
+DESKTOP_ID="omakub-webapp-$APP_SLUG"
+DESKTOP_FILE="$HOME/.local/share/applications/$DESKTOP_ID.desktop"
+LEGACY_DESKTOP_FILE="$HOME/.local/share/applications/$APP_NAME.desktop"
+
 mkdir -p "$ICON_DIR"
 
 if [[ -z $ICON_REF ]]; then
   ICON_REF="https://www.google.com/s2/favicons?domain=${APP_URL}&sz=128"
 fi
 
+ICON_PATH="$ICON_DIR/$DESKTOP_ID.png"
 if [[ $ICON_REF =~ ^https?:// ]]; then
-  ICON_PATH="$ICON_DIR/$APP_NAME.png"
   if ! curl -fsSL -o "$ICON_PATH" "$ICON_REF" || [[ ! -s $ICON_PATH ]]; then
     echo "Error: Failed to download icon."
     exit 1
   fi
 else
-  ICON_PATH="$ICON_DIR/$ICON_REF"
+  if [[ -f $ICON_REF ]]; then
+    cp -f "$ICON_REF" "$ICON_PATH"
+  elif [[ -f $ICON_DIR/$ICON_REF ]]; then
+    cp -f "$ICON_DIR/$ICON_REF" "$ICON_PATH"
+  else
+    echo "Error: Icon file not found: $ICON_REF"
+    exit 1
+  fi
 fi
 
-# Use custom exec if provided, otherwise default behavior
-EXEC_COMMAND="${CUSTOM_EXEC:-omakub-launch-webapp $APP_URL $APP_NAME}"
-
-# Create application .desktop file
-DESKTOP_FILE="$HOME/.local/share/applications/$APP_NAME.desktop"
+if [[ -n $CUSTOM_EXEC ]]; then
+  EXEC_COMMAND="$CUSTOM_EXEC"
+else
+  ESCAPED_URL=$(desktop_exec_escape "$APP_URL")
+  ESCAPED_NAME=$(desktop_exec_escape "$APP_NAME")
+  ESCAPED_DESKTOP_ID=$(desktop_exec_escape "$DESKTOP_ID")
+  EXEC_COMMAND="omakub-launch-webapp \"$ESCAPED_URL\" \"$ESCAPED_NAME\" \"$ESCAPED_DESKTOP_ID\""
+fi
 
 cat >"$DESKTOP_FILE" <<EOF
 [Desktop Entry]
@@ -78,19 +109,23 @@ Terminal=false
 Type=Application
 Icon=$ICON_PATH
 StartupNotify=true
-StartupWMClass=$(echo "$APP_NAME" | sed 's/[^a-zA-Z0-9]//g' | tr '[:upper:]' '[:lower:]')
+StartupWMClass=$DESKTOP_ID
 Categories=GTK;
 EOF
 
-# Add mime types if provided
 if [[ -n $MIME_TYPES ]]; then
   echo "MimeType=$MIME_TYPES" >>"$DESKTOP_FILE"
 fi
 
 chmod +x "$DESKTOP_FILE"
 
-# Add to Web Apps folder in app grid
-omakub-app-folder-add "$APP_NAME.desktop" "Web Apps"
+if [[ -f $LEGACY_DESKTOP_FILE && $LEGACY_DESKTOP_FILE != $DESKTOP_FILE ]]; then
+  if grep -q '^Exec=.*omakub-launch-webapp.*' "$LEGACY_DESKTOP_FILE"; then
+    rm -f "$LEGACY_DESKTOP_FILE"
+  fi
+fi
+
+omakub-app-folder-add "$DESKTOP_ID.desktop" "Web Apps"
 
 if [[ $INTERACTIVE_MODE == true ]]; then
   echo -e "You can now find $APP_NAME using the app launcher (SUPER + SPACE)\n"
