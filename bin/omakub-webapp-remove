@@ -6,10 +6,7 @@ set -e
 # Usage: omakub-webapp-remove [app_name_or_desktop_id...]
 
 ICON_DIR="$HOME/.local/share/applications/icons"
-<<<<<<< HEAD
 WEBAPP_ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
-=======
->>>>>>> 0aebc76 (try fix issue 39 v1)
 DESKTOP_DIR="${OMAKUB_WEBAPP_DESKTOP_DIR:-$HOME/.local/share/applications}"
 WEBAPP_DATA_ROOT="$HOME/.config/omakub/webapp"
 
@@ -57,27 +54,18 @@ remove_webapp_file() {
   if [[ -n $icon_ref ]]; then
     if [[ $icon_ref == /* && -f $icon_ref ]]; then
       rm -f "$icon_ref"
-<<<<<<< HEAD
     else
       rm -f "$ICON_DIR/$icon_ref"
       rm -f "$ICON_DIR/$icon_ref.png"
       rm -f "$WEBAPP_ICON_DIR/$icon_ref"
       rm -f "$WEBAPP_ICON_DIR/$icon_ref.png"
-=======
-    elif [[ -f $ICON_DIR/$icon_ref ]]; then
-      rm -f "$ICON_DIR/$icon_ref"
->>>>>>> 0aebc76 (try fix issue 39 v1)
     fi
   fi
 
   rm -f "$ICON_DIR/$desktop_id.png"
-<<<<<<< HEAD
   rm -f "$WEBAPP_ICON_DIR/$desktop_id.png"
   rm -f "$ICON_DIR/$app_name.png"
   rm -f "$WEBAPP_ICON_DIR/$app_name.png"
-=======
-  rm -f "$ICON_DIR/$app_name.png"
->>>>>>> 0aebc76 (try fix issue 39 v1)
 
   if [[ -n $profile_slug ]]; then
     rm -rf "$WEBAPP_DATA_ROOT/$profile_slug"
@@ -148,7 +136,6 @@ fi
 for file in "${APP_FILES[@]}"; do
   remove_webapp_file "$file"
 done
-<<<<<<< HEAD
 
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
@@ -157,5 +144,3 @@ fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
 fi
-=======
->>>>>>> 0aebc76 (try fix issue 39 v1)
