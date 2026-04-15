@@ -25,6 +25,15 @@ desktop_exec_escape() {
   echo "$value"
 }
 
+resolve_webapp_launcher_path() {
+  local launcher_path
+  launcher_path=$(command -v omakub-launch-webapp 2>/dev/null || true)
+  if [[ -z $launcher_path ]]; then
+    launcher_path="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/omakub-launch-webapp"
+  fi
+  echo "$launcher_path"
+}
+
 if (( $# < 3 )); then
   echo -e "\e[32mLet's create a new web app you can start with the app launcher.\n\e[0m"
   APP_NAME=$(gum input --prompt "Name> " --placeholder "My favorite web app")
@@ -93,10 +102,12 @@ fi
 if [[ -n $CUSTOM_EXEC ]]; then
   EXEC_COMMAND="$CUSTOM_EXEC"
 else
+  LAUNCHER_PATH=$(resolve_webapp_launcher_path)
+  ESCAPED_LAUNCHER_PATH=$(desktop_exec_escape "$LAUNCHER_PATH")
   ESCAPED_URL=$(desktop_exec_escape "$APP_URL")
   ESCAPED_NAME=$(desktop_exec_escape "$APP_NAME")
   ESCAPED_DESKTOP_ID=$(desktop_exec_escape "$DESKTOP_ID")
-  EXEC_COMMAND="omakub-launch-webapp \"$ESCAPED_URL\" \"$ESCAPED_NAME\" \"$ESCAPED_DESKTOP_ID\""
+  EXEC_COMMAND="\"$ESCAPED_LAUNCHER_PATH\" \"$ESCAPED_URL\" \"$ESCAPED_NAME\" \"$ESCAPED_DESKTOP_ID\""
 fi
 
 cat >"$DESKTOP_FILE" <<EOF
