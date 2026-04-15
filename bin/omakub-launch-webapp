@@ -20,6 +20,33 @@ webapp_slug() {
   echo "$value"
 }
 
+resolve_browser_exec() {
+  local default_browser candidate
+  local -a candidates=()
+
+  default_browser=$(xdg-settings get default-web-browser 2>/dev/null || true)
+
+  case $default_browser in
+    google-chrome*) candidates=(google-chrome-stable google-chrome) ;;
+    brave-browser*) candidates=(brave-browser) ;;
+    microsoft-edge*) candidates=(microsoft-edge-stable microsoft-edge) ;;
+    opera*) candidates=(opera) ;;
+    vivaldi*) candidates=(vivaldi-stable vivaldi) ;;
+    helium*) candidates=(helium) ;;
+    chromium*) candidates=(chromium chromium-browser) ;;
+    *) candidates=(chromium chromium-browser google-chrome-stable google-chrome brave-browser microsoft-edge-stable microsoft-edge opera vivaldi-stable vivaldi helium) ;;
+  esac
+
+  for candidate in "${candidates[@]}"; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 APP_URL="$1"
 APP_NAME="$2"
 DESKTOP_ID="$3"
@@ -54,12 +81,10 @@ fi
 
 export CHROME_DESKTOP="$CHROME_DESKTOP_FILE"
 
-browser=$(xdg-settings get default-web-browser)
-case $browser in
-google-chrome* | brave-browser* | microsoft-edge* | opera* | vivaldi* | helium*) ;;
-*) browser="chromium.desktop" ;;
-esac
-browser_exec=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' {~/.local,~/.nix-profile,/usr}/share/applications/$browser 2>/dev/null | head -1)
+if ! browser_exec=$(resolve_browser_exec); then
+  echo "Error: Chromium-based browser not found." >&2
+  exit 1
+fi
 
 exec "$browser_exec" \
   --user-data-dir="$WEBAPP_DATA_DIR" \

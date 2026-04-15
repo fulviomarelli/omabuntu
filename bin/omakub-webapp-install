@@ -5,7 +5,9 @@ set -e
 # omakub-webapp-install: Create a .desktop file for a web app and add it to the "Web Apps" folder.
 # Usage: omakub-webapp-install <app_name> <app_url> <icon_url_or_path> [custom_exec] [mime_types]
 
-ICON_DIR="$HOME/.local/share/applications/icons"
+SOURCE_ICON_DIR="$HOME/.local/share/applications/icons"
+WEBAPP_ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
+DESKTOP_DIR="$HOME/.local/share/applications"
 
 webapp_slug() {
   local value="$1"
@@ -44,9 +46,9 @@ if (( $# < 3 )); then
 
   # Try to fetch favicon automatically first.
   FAVICON_URL="https://www.google.com/s2/favicons?domain=${APP_URL}&sz=128"
-  mkdir -p "$ICON_DIR"
-  if curl -fsSL -o "$ICON_DIR/$APP_NAME.png" "$FAVICON_URL" && [[ -s $ICON_DIR/$APP_NAME.png ]]; then
-    ICON_REF="$ICON_DIR/$APP_NAME.png"
+  mkdir -p "$SOURCE_ICON_DIR"
+  if curl -fsSL -o "$SOURCE_ICON_DIR/$APP_NAME.png" "$FAVICON_URL" && [[ -s $SOURCE_ICON_DIR/$APP_NAME.png ]]; then
+    ICON_REF="$SOURCE_ICON_DIR/$APP_NAME.png"
   else
     ICON_REF=$(gum input --prompt "Icon URL> " --placeholder "Could not fetch favicon automatically. Enter PNG icon URL (see https://dashboardicons.com)")
   fi
@@ -73,16 +75,17 @@ fi
 
 APP_SLUG=$(webapp_slug "$APP_NAME")
 DESKTOP_ID="omakub-webapp-$APP_SLUG"
-DESKTOP_FILE="$HOME/.local/share/applications/$DESKTOP_ID.desktop"
-LEGACY_DESKTOP_FILE="$HOME/.local/share/applications/$APP_NAME.desktop"
+DESKTOP_FILE="$DESKTOP_DIR/$DESKTOP_ID.desktop"
+LEGACY_DESKTOP_FILE="$DESKTOP_DIR/$APP_NAME.desktop"
 
-mkdir -p "$ICON_DIR"
+mkdir -p "$SOURCE_ICON_DIR"
+mkdir -p "$WEBAPP_ICON_DIR"
 
 if [[ -z $ICON_REF ]]; then
   ICON_REF="https://www.google.com/s2/favicons?domain=${APP_URL}&sz=128"
 fi
 
-ICON_PATH="$ICON_DIR/$DESKTOP_ID.png"
+ICON_PATH="$WEBAPP_ICON_DIR/$DESKTOP_ID.png"
 if [[ $ICON_REF =~ ^https?:// ]]; then
   if ! curl -fsSL -o "$ICON_PATH" "$ICON_REF" || [[ ! -s $ICON_PATH ]]; then
     echo "Error: Failed to download icon."
@@ -91,8 +94,14 @@ if [[ $ICON_REF =~ ^https?:// ]]; then
 else
   if [[ -f $ICON_REF ]]; then
     cp -f "$ICON_REF" "$ICON_PATH"
-  elif [[ -f $ICON_DIR/$ICON_REF ]]; then
-    cp -f "$ICON_DIR/$ICON_REF" "$ICON_PATH"
+  elif [[ -f $SOURCE_ICON_DIR/$ICON_REF ]]; then
+    cp -f "$SOURCE_ICON_DIR/$ICON_REF" "$ICON_PATH"
+  elif [[ -f $SOURCE_ICON_DIR/$ICON_REF.png ]]; then
+    cp -f "$SOURCE_ICON_DIR/$ICON_REF.png" "$ICON_PATH"
+  elif [[ -f $WEBAPP_ICON_DIR/$ICON_REF ]]; then
+    cp -f "$WEBAPP_ICON_DIR/$ICON_REF" "$ICON_PATH"
+  elif [[ -f $WEBAPP_ICON_DIR/$ICON_REF.png ]]; then
+    cp -f "$WEBAPP_ICON_DIR/$ICON_REF.png" "$ICON_PATH"
   else
     echo "Error: Icon file not found: $ICON_REF"
     exit 1
@@ -118,7 +127,7 @@ Comment=$APP_NAME
 Exec=$EXEC_COMMAND
 Terminal=false
 Type=Application
-Icon=$ICON_PATH
+Icon=$DESKTOP_ID
 StartupNotify=true
 StartupWMClass=$DESKTOP_ID
 Categories=GTK;
@@ -137,6 +146,14 @@ if [[ -f $LEGACY_DESKTOP_FILE && $LEGACY_DESKTOP_FILE != $DESKTOP_FILE ]]; then
 fi
 
 omakub-app-folder-add "$DESKTOP_ID.desktop" "Web Apps"
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
+fi
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+fi
 
 if [[ $INTERACTIVE_MODE == true ]]; then
   echo -e "You can now find $APP_NAME using the app launcher (SUPER + SPACE)\n"
